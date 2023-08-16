@@ -1,0 +1,190 @@
+version: "3"
+services:
+  mysqldb:
+    image: mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_DATABASE: company
+
+  springApp:
+    depends_on:
+      - mysqldb
+      - broker
+    image: my-java-app
+    #restart: always
+    ports:
+      - "8080:8080"
+
+  phpnyadmin:
+    depends_on:
+      - mysqldb
+    image: phpmyadmin
+    restart: always
+    ports:
+      - "9090:9090"
+    environment:
+      PMA_HOST: mysql_database
+      MYSQL_ROOT_PASSWORD: 1234
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:6.0.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  broker:
+    image: confluentinc/cp-server:6.0.0
+    hostname: broker
+    container_name: broker
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9101
+      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker:9092
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      CONFLUENT_METRICS_ENABLE: 'true'
+      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:6.0.0
+    hostname: schema-registry
+    restart: always
+    container_name: schema-registry
+    depends_on:
+      - broker
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:6.0.0
+    hostname: control-center
+    container_name: control-center
+    depends_on:
+      - broker
+      - schema-registry
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONTROL_CENTER_CONNECT_CLUSTER: 'connect:8083'
+      CONTROL_CENTER_KSQL_KSQLDB1_URL: "http://ksqldb-server:8088"
+      CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL: "http://localhost:8088"
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021
+
+  elasticsearch:
+    container_name: elasticsearch-cntr
+    image: elasticsearch:7.9.1
+    environment:
+      - cluster.name=kafka-cluster
+      - bootstrap.memory_lock=true
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9200:9200
+      - 9300:9300
+    stdin_open: true
+    tty: true
+    restart: always
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "50"
+    healthcheck:
+      test: curl -u elastic:elastic -s -f elasticsearch-cntr:9200/_cat/health >/dev/null || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 5
+  logstash:
+    container_name: logstash-cntr
+    image: logstash:7.9.1
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash-kafka.conf
+      - centralized-logs:/centralized-logs
+    ports:
+      - 5044:5044
+    depends_on:
+      - elasticsearch
+    stdin_open: true
+    tty: true
+    restart: always
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "50"
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "--fail", "http://logstash-cntr:9600"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+  kibana:
+    container_name: kibana-cntr
+    image: kibana:7.9.1
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
+    stdin_open: true
+    tty: true
+    restart: always
+
+    links: ['elasticsearch']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "50"
+    healthcheck:
+      test: curl --fail http://kibana-cntr:5601 || exit 1
+      interval: 30s
+      retries: 3
+      timeout: 10s
+volumes:
+  centralized-logs:
