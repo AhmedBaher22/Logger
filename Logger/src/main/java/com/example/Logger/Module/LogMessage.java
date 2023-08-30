@@ -1,6 +1,6 @@
 package com.example.Logger.Module;
 
-import jakarta.persistence.*;
+
 import lombok.*;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +13,7 @@ public class LogMessage {
     private String timestamp;
 
 
-    @Id
+
     // Correlation ID associated with the log entry
     private String correlationId;
 
