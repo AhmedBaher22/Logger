@@ -1,33 +1,13 @@
 version: "3"
 services:
-  mysqldb:
-    image: mysql
-    restart: always
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: 1234
-      MYSQL_DATABASE: company
-
   springApp:
     depends_on:
-      - mysqldb
       - broker
     image: my-java-app
     #restart: always
     ports:
       - "8080:8080"
 
-  phpnyadmin:
-    depends_on:
-      - mysqldb
-    image: phpmyadmin
-    restart: always
-    ports:
-      - "9090:9090"
-    environment:
-      PMA_HOST: mysql_database
-      MYSQL_ROOT_PASSWORD: 1234
 
   zookeeper:
     image: confluentinc/cp-zookeeper:6.0.0
