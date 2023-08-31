@@ -39,17 +39,17 @@ public class LogMessage {
         public String toString() {
             switch (this) {
                 case TRACE:
-                    return "Trace";
+                    return "TRACE";
                 case DEBUG:
-                    return "Debug";
+                    return "DEBUG";
                 case INFO:
-                    return "Info";
+                    return "INFO";
                 case WARN:
-                    return "Warn";
+                    return "WARN";
                 case ERROR:
-                    return "Error";
+                    return "ERROR";
                 case FATAL:
-                    return "Fatal";
+                    return "FATAL";
                 default:
                     return super.toString(); // Fallback to default behavior
             }
