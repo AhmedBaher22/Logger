@@ -3,7 +3,7 @@ services:
   springApp:
     depends_on:
       - kafka
-    image: my-java-app
+    image: ahmedbaher22/my-java-app:latest
     restart: always
     ports:
       - "8080:8080"
