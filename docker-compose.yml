@@ -2,7 +2,7 @@ version: "3"
 services:
   springApp:
     depends_on:
-      - broker
+      - kafka
     image: my-java-app
     restart: always
     ports:
